@@ -90,5 +90,5 @@ def import_puzzle_local():
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {str(e)}")
-    except Exception as e:
+    except Exception as e: 
         raise HTTPException(status_code=500, detail=f"Error durante la importación: {str(e)}")
