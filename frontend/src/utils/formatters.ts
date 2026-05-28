@@ -8,5 +8,5 @@ export function formatStatus(status: "complete" | "partial" | "blocked"): string
 }
 
 export function formatPieces(nums: number[]): string {
-  return nums.length === 0 ? "—" : nums.join(", ");
+  return nums.length === 0 ? "Ninguna" : nums.join(", ");
 }

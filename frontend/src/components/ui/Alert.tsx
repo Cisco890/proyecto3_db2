@@ -6,6 +6,7 @@ type Props = {
   variant?: Variant;
   title?: string;
   children: React.ReactNode;
+  className?: string;
 };
 
 const styles: Record<Variant, { container: string; icon: string }> = {
@@ -34,10 +35,10 @@ const icons: Record<Variant, string> = {
   success: "✓",
 };
 
-export function Alert({ variant = "info", title, children }: Props) {
+export function Alert({ variant = "info", title, children, className = "" }: Props) {
   const s = styles[variant];
   return (
-    <div className={`flex gap-3 rounded-lg border p-4 ${s.container}`}>
+    <div className={`flex gap-3 rounded-lg border p-4 ${s.container} ${className}`}>
       <span className={`mt-0.5 text-base font-bold ${s.icon}`}>
         {icons[variant]}
       </span>
