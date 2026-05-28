@@ -1,6 +1,13 @@
 from collections import deque
-from fastapi import HTTPException
 
+from app.errors import (
+    AppError,
+    PUZZLE_NOT_FOUND,
+    PIECE_NOT_FOUND,
+    PIECE_NOT_AVAILABLE,
+    PIECE_NOT_IN_PUZZLE,
+    NO_PIECES_IN_PUZZLE,
+)
 from app.repositories.assembly_repository import assembly_repository
 from app.repositories.puzzle_repository import puzzle_repository
 from app.schemas.assembly_schema import (
@@ -9,10 +16,6 @@ from app.schemas.assembly_schema import (
     UnresolvedConnection,
 )
 
-
-# ------------------------------------------------------------------ #
-#  Helpers                                                            #
-# ------------------------------------------------------------------ #
 
 def _build_instruction(
     base_piece: int,
@@ -27,7 +30,6 @@ def _build_instruction(
 
 
 def _build_diagram(placed: list[int]) -> str:
-    """Construye un diagrama de texto lineal con las piezas colocadas."""
     if not placed:
         return ""
     return "---".join(f"[{n}]" for n in placed)
@@ -61,9 +63,7 @@ def _build_summary(
     missing_count: int,
 ) -> str:
     if status == "complete":
-        return (
-            f"Armado completo. Se colocaron {placed_count} de {total_available} piezas."
-        )
+        return f"Armado completo. Se colocaron {placed_count} de {total_available} piezas."
     if status == "partial":
         return (
             f"Armado parcial completado. "
@@ -76,54 +76,53 @@ def _build_summary(
     )
 
 
-# ------------------------------------------------------------------ #
-#  Algoritmo BFS principal                                            #
-# ------------------------------------------------------------------ #
-
 def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResult:
-    """
-    Recorre el grafo desde la pieza inicial usando BFS y genera
-    instrucciones paso a paso para armar el rompecabezas.
-    """
-
     # 1. Validar que el puzzle exista
     puzzle = puzzle_repository.get_puzzle_by_id(puzzle_id)
     if not puzzle:
-        raise HTTPException(status_code=404, detail="Puzzle no encontrado.")
+        raise AppError(404, "Puzzle no encontrado.", PUZZLE_NOT_FOUND)
 
-    # 2. Validar que la pieza inicial exista y pertenezca al puzzle
+    # 2. Validar que el puzzle tenga piezas
+    all_pieces = puzzle_repository.get_pieces_by_puzzle(puzzle_id)
+    if not all_pieces:
+        raise AppError(400, "El puzzle no tiene piezas asociadas.", NO_PIECES_IN_PUZZLE)
+
+    all_numbers = [p["numero"] for p in all_pieces]
+
+    # 3. Validar que haya piezas disponibles
+    total_available = assembly_repository.count_available_pieces(puzzle_id)
+    if total_available == 0:
+        raise AppError(
+            400,
+            "El puzzle no tiene piezas disponibles para armar.",
+            PIECE_NOT_AVAILABLE,
+        )
+
+    # 4. Validar que la pieza inicial exista y pertenezca al puzzle
     start_piece = assembly_repository.get_piece_with_puzzle(start_piece_id, puzzle_id)
     if not start_piece:
         exists = assembly_repository.get_piece_by_id(start_piece_id)
         if not exists:
-            raise HTTPException(
-                status_code=404, detail="La pieza inicial no fue encontrada."
-            )
-        raise HTTPException(
-            status_code=400,
-            detail="La pieza inicial no pertenece a este puzzle.",
+            raise AppError(404, "La pieza inicial no fue encontrada.", PIECE_NOT_FOUND)
+        raise AppError(
+            400,
+            "La pieza inicial no pertenece a este puzzle.",
+            PIECE_NOT_IN_PUZZLE,
         )
 
-    # 3. Validar que la pieza inicial esté disponible
+    # 5. Validar que la pieza inicial esté disponible
     if not start_piece.get("disponible", False):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "La pieza inicial no está disponible. "
-                "Selecciona una pieza marcada como disponible."
-            ),
+        raise AppError(
+            400,
+            "La pieza inicial no está disponible. Selecciona una pieza marcada como disponible.",
+            PIECE_NOT_AVAILABLE,
         )
 
-    # 4. Obtener conteos y piezas faltantes
-    total_available = assembly_repository.count_available_pieces(puzzle_id)
+    # 6. Piezas faltantes
     missing_data = assembly_repository.get_missing_pieces_by_puzzle(puzzle_id)
     missing_numbers = [p["numero"] for p in missing_data]
 
-    # Todos los números de pieza del puzzle (para calcular pendientes)
-    all_pieces = puzzle_repository.get_pieces_by_puzzle(puzzle_id)
-    all_numbers = [p["numero"] for p in all_pieces]
-
-    # 5. BFS
+    # 7. BFS
     visited: set[str] = set()
     queue: deque[str] = deque()
     steps: list[AssemblyStep] = []
@@ -131,7 +130,6 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
     unresolved: list[UnresolvedConnection] = []
     step_number = 0
 
-    # Colocar pieza inicial
     visited.add(start_piece_id)
     queue.append(start_piece_id)
     placed_numbers.append(start_piece["numero"])
@@ -152,7 +150,6 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
                 continue
 
             if not vecina.get("disponible", False):
-                # Pieza faltante: registrar conexión no realizada pero no bloquear
                 unresolved.append(
                     UnresolvedConnection(
                         from_piece=current["numero"],
@@ -164,7 +161,6 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
                 )
                 continue
 
-            # Pieza disponible: crear paso y encolar
             visited.add(vecina_id)
             queue.append(vecina_id)
             placed_numbers.append(vecina["numero"])
@@ -200,7 +196,7 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
             )
             steps.append(step)
 
-    # 6. Determinar estado final
+    # 8. Resultado final
     status = _determine_status(
         len(placed_numbers), total_available, len(missing_numbers), len(steps)
     )

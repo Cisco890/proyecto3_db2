@@ -41,6 +41,13 @@ class PieceSchema(BaseModel):
             raise ValueError(f"El campo '{info.field_name}' no puede estar vacío.")
         return v.strip()
 
+    @field_validator("numero")
+    @classmethod
+    def numero_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("numero debe ser un entero mayor a 0.")
+        return v
+
 
 class ConnectionSchema(BaseModel):
     """Esquema para validar los datos de una conexión desde conexiones.csv."""
