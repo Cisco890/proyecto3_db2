@@ -1,166 +1,236 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { importPuzzle } from "../api/puzzleApi";
 import type { ImportResult } from "../types/puzzle";
+import { FileUploadCard } from "../components/puzzle/FileUploadCard";
 import { PageHeader } from "../components/layout/PageHeader";
-import { Card } from "../components/ui/Card";
-import { Button } from "../components/ui/Button";
 import { Alert } from "../components/ui/Alert";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
 
-type FileField = {
-  key: "puzzle_file" | "pieces_file" | "connections_file" | "image_file";
-  label: string;
-  accept: string;
-  required: boolean;
-  hint: string;
-};
+type FormStatus = "idle" | "validating" | "submitting" | "success" | "error";
 
-const fields: FileField[] = [
-  {
-    key: "puzzle_file",
-    label: "puzzle.json",
-    accept: ".json",
-    required: true,
-    hint: "Datos del rompecabezas (id, nombre, temática, total de piezas).",
-  },
-  {
-    key: "pieces_file",
-    label: "piezas.csv",
-    accept: ".csv",
-    required: true,
-    hint: "Lista de piezas con su disponibilidad.",
-  },
-  {
-    key: "connections_file",
-    label: "conexiones.csv",
-    accept: ".csv",
-    required: true,
-    hint: "Conexiones entre piezas con sus puntos físicos.",
-  },
-  {
-    key: "image_file",
-    label: "Imagen del rompecabezas",
-    accept: "image/*",
-    required: false,
-    hint: "Imagen de referencia (opcional).",
-  },
-];
+const ALLOWED_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"];
+
+function getExtension(filename: string): string {
+  return filename.split(".").pop()?.toLowerCase() ?? "";
+}
 
 export function ImportPuzzlePage() {
   const navigate = useNavigate();
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const [files, setFiles] = useState<Record<string, File | null>>({
-    puzzle_file: null,
-    pieces_file: null,
-    connections_file: null,
-    image_file: null,
-  });
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  function handleFile(key: string, file: File | null) {
-    setFiles((prev) => ({ ...prev, [key]: file }));
-    setResult(null);
-    setError(null);
+  const [puzzleFile, setPuzzleFile] = useState<File | null>(null);
+  const [piecesFile, setPiecesFile] = useState<File | null>(null);
+  const [connectionsFile, setConnectionsFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const [status, setStatus] = useState<FormStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+
+  function handleImageChange(file: File | null) {
+    setImageFile(file);
+    if (!file) {
+      setImagePreview(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setResult(null);
+  function validate(): string | null {
+    if (!puzzleFile) return "Falta el archivo puzzle.json.";
+    if (!piecesFile) return "Falta el archivo piezas.csv.";
+    if (!connectionsFile) return "Falta el archivo conexiones.csv.";
+    if (!imageFile) return "Falta la imagen general del rompecabezas.";
+    const ext = getExtension(imageFile.name);
+    if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext))
+      return `La imagen debe ser .jpg, .jpeg, .png o .webp. Se recibió: .${ext}`;
+    return null;
+  }
+
+  async function handleSubmit() {
+    setStatus("validating");
+    setErrorMessage(null);
+
+    const validationError = validate();
+    if (validationError) {
+      setErrorMessage(validationError);
+      setStatus("error");
+      return;
+    }
+
+    setStatus("submitting");
 
     const form = new FormData();
-    for (const f of fields) {
-      const file = files[f.key];
-      if (f.required && !file) {
-        setError(`El archivo "${f.label}" es obligatorio.`);
-        return;
-      }
-      if (file) form.append(f.key, file);
-    }
+    form.append("puzzle_file", puzzleFile!);
+    form.append("pieces_file", piecesFile!);
+    form.append("connections_file", connectionsFile!);
+    form.append("image_file", imageFile!);
 
-    setLoading(true);
     try {
-      const res = await importPuzzle(form);
-      setResult(res);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Error al importar.");
-    } finally {
-      setLoading(false);
+      const data = await importPuzzle(form);
+      setResult(data);
+      setStatus("success");
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Error al importar.");
+      setStatus("error");
     }
   }
 
+  const isSubmitting = status === "submitting";
+  const allSelected = !!(puzzleFile && piecesFile && connectionsFile && imageFile);
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto">
       <PageHeader
         title="Importar rompecabezas"
-        subtitle="Carga los archivos de datos y la imagen opcional del rompecabezas."
+        subtitle="Carga los archivos necesarios para registrar un rompecabezas. La imagen se guardará como referencia general y Neo4j almacenará únicamente su ruta."
       />
 
-      <Card className="p-6">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {fields.map((f) => (
-            <div key={f.key} className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-slate-700">
-                {f.label}
-                {f.required && <span className="text-red-500 ml-1">*</span>}
-              </label>
-              <p className="text-xs text-slate-400">{f.hint}</p>
-              <input
-                ref={(el) => { fileRefs.current[f.key] = el; }}
-                type="file"
-                accept={f.accept}
-                className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-xs file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                onChange={(e) =>
-                  handleFile(f.key, e.target.files?.[0] ?? null)
-                }
-              />
-              {files[f.key] && (
-                <p className="text-xs text-emerald-600">
-                  ✓ {files[f.key]!.name}
-                </p>
-              )}
-            </div>
-          ))}
+      {/* File upload section */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-4">
+          Archivos requeridos
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FileUploadCard
+            title="puzzle.json"
+            description="Datos generales del rompecabezas."
+            accept=".json"
+            file={puzzleFile}
+            onChange={setPuzzleFile}
+            required
+          />
+          <FileUploadCard
+            title="piezas.csv"
+            description="Listado de piezas con su disponibilidad."
+            accept=".csv"
+            file={piecesFile}
+            onChange={setPiecesFile}
+            required
+          />
+          <FileUploadCard
+            title="conexiones.csv"
+            description="Conexiones físicas entre piezas."
+            accept=".csv"
+            file={connectionsFile}
+            onChange={setConnectionsFile}
+            required
+          />
+          <FileUploadCard
+            title="Imagen general"
+            description="Foto o imagen del rompecabezas completo."
+            accept=".jpg,.jpeg,.png,.webp"
+            file={imageFile}
+            onChange={handleImageChange}
+            required
+          />
+        </div>
+      </Card>
 
-          {error && (
-            <Alert variant="error">{error}</Alert>
-          )}
+      {/* Image preview */}
+      {imagePreview && (
+        <Card className="p-4 mb-6">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            Vista previa de imagen
+          </p>
+          <div className="overflow-hidden rounded-lg max-h-64 flex items-center justify-center bg-slate-100">
+            <img
+              src={imagePreview}
+              alt="Vista previa del rompecabezas"
+              className="max-h-64 w-auto rounded-lg object-contain"
+            />
+          </div>
+        </Card>
+      )}
 
-          {result && (
-            <Alert variant="success" title="Importación exitosa">
-              <ul className="mt-1 space-y-0.5 text-sm">
-                <li>Rompecabezas: <strong>{result.puzzle_id}</strong></li>
-                <li>Piezas importadas: <strong>{result.pieces_imported}</strong></li>
-                <li>Conexiones importadas: <strong>{result.connections_imported}</strong></li>
+      {/* Error message */}
+      {status === "error" && errorMessage && (
+        <div className="mb-5">
+          <Alert variant="error" title="No se pudo importar">
+            {errorMessage}
+          </Alert>
+        </div>
+      )}
+
+      {/* Success result */}
+      {status === "success" && result && (
+        <div className="mb-5 space-y-4">
+          <Alert variant="success" title="Rompecabezas importado correctamente">
+            <ul className="mt-1 space-y-0.5 text-sm">
+              <li>
+                <span className="font-medium">ID:</span> {result.puzzle_id}
+              </li>
+              <li>
+                <span className="font-medium">Piezas importadas:</span>{" "}
+                {result.pieces_imported}
+              </li>
+              <li>
+                <span className="font-medium">Conexiones importadas:</span>{" "}
+                {result.connections_imported}
+              </li>
+              <li>
+                <span className="font-medium">Imagen:</span> {result.image_url}
+              </li>
+            </ul>
+          </Alert>
+
+          {result.warnings && result.warnings.length > 0 && (
+            <Alert variant="warning" title="Advertencias">
+              <ul className="mt-1 space-y-0.5 text-sm list-disc list-inside">
+                {result.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
               </ul>
-              {result.warnings.length > 0 && (
-                <div className="mt-3">
-                  <p className="font-medium text-amber-700">Advertencias:</p>
-                  <ul className="list-disc list-inside space-y-0.5 text-amber-700">
-                    {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                  </ul>
-                </div>
-              )}
             </Alert>
           )}
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" loading={loading}>
-              {loading ? "Importando..." : "Importar"}
+          <div className="flex gap-3">
+            <Button
+              variant="primary"
+              onClick={() => navigate(`/puzzles/${result.puzzle_id}`)}
+            >
+              Ver detalle del rompecabezas
             </Button>
-            {result && (
-              <Button
-                variant="secondary"
-                onClick={() => navigate(`/puzzles/${result.puzzle_id}`)}
-              >
-                Ver rompecabezas
-              </Button>
-            )}
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setStatus("idle");
+                setResult(null);
+                setPuzzleFile(null);
+                setPiecesFile(null);
+                setConnectionsFile(null);
+                setImageFile(null);
+                setImagePreview(null);
+              }}
+            >
+              Importar otro
+            </Button>
           </div>
-        </form>
-      </Card>
+        </div>
+      )}
+
+      {/* Submit button */}
+      {status !== "success" && (
+        <div className="flex items-center gap-4">
+          <Button
+            variant="primary"
+            disabled={!allSelected || isSubmitting}
+            loading={isSubmitting}
+            onClick={handleSubmit}
+          >
+            {isSubmitting ? "Importando..." : "Importar rompecabezas"}
+          </Button>
+          {!allSelected && (
+            <p className="text-xs text-slate-400">
+              Selecciona los 4 archivos para continuar.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { getPuzzles } from "../api/puzzleApi";
 import type { Puzzle } from "../types/puzzle";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -7,6 +6,7 @@ import { PuzzleCard } from "../components/puzzle/PuzzleCard";
 import { EmptyState } from "../components/puzzle/EmptyState";
 import { LoadingState } from "../components/ui/LoadingState";
 import { Alert } from "../components/ui/Alert";
+import { Link } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 
 export function DashboardPage() {
@@ -17,7 +17,9 @@ export function DashboardPage() {
   useEffect(() => {
     getPuzzles()
       .then(setPuzzles)
-      .catch((e: Error) => setError(e.message))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Error al cargar.")
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -25,10 +27,10 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="Rompecabezas"
-        subtitle="Modela y arma tus rompecabezas usando grafos en Neo4j."
+        subtitle="Gestiona y arma tus rompecabezas desde aquí."
         actions={
           <Link to="/importar">
-            <Button>+ Importar rompecabezas</Button>
+            <Button variant="primary">Importar rompecabezas</Button>
           </Link>
         }
       />
@@ -36,7 +38,7 @@ export function DashboardPage() {
       {loading && <LoadingState message="Cargando rompecabezas..." />}
 
       {!loading && error && (
-        <Alert variant="error" title="No se pudo conectar al backend">
+        <Alert variant="error" title="Error de conexión">
           {error}
         </Alert>
       )}
@@ -44,9 +46,9 @@ export function DashboardPage() {
       {!loading && !error && puzzles.length === 0 && <EmptyState />}
 
       {!loading && !error && puzzles.length > 0 && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {puzzles.map((p) => (
-            <PuzzleCard key={p.id} puzzle={p} />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {puzzles.map((puzzle) => (
+            <PuzzleCard key={puzzle.id} puzzle={puzzle} />
           ))}
         </div>
       )}

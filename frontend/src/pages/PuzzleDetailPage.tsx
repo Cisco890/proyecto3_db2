@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { getPuzzleById, getPiecesByPuzzle, getConnectionsByPuzzle } from "../api/puzzleApi";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  getPuzzleById,
+  getPiecesByPuzzle,
+  getConnectionsByPuzzle,
+} from "../api/puzzleApi";
 import { imageUrl } from "../api/client";
 import type { Puzzle, Piece, Connection } from "../types/puzzle";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PuzzleSummary } from "../components/puzzle/PuzzleSummary";
-import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
 import { Alert } from "../components/ui/Alert";
 import { LoadingState } from "../components/ui/LoadingState";
 
@@ -20,137 +24,199 @@ export function PuzzleDetailPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (!puzzleId) return;
-    Promise.all([
-      getPuzzleById(puzzleId),
-      getPiecesByPuzzle(puzzleId),
-      getConnectionsByPuzzle(puzzleId),
-    ])
-      .then(([p, pcs, conns]) => {
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [p, pcs, conns] = await Promise.all([
+          getPuzzleById(puzzleId!),
+          getPiecesByPuzzle(puzzleId!),
+          getConnectionsByPuzzle(puzzleId!),
+        ]);
         setPuzzle(p);
         setPieces(pcs);
         setConnections(conns);
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "No se pudo cargar el rompecabezas."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
   }, [puzzleId]);
 
   if (loading) return <LoadingState message="Cargando rompecabezas..." />;
-  if (error) return <Alert variant="error" title="Error">{error}</Alert>;
-  if (!puzzle) return null;
 
-  const available = pieces.filter((p) => p.disponible);
-  const missing = pieces.filter((p) => !p.disponible);
+  if (error || !puzzle) {
+    return (
+      <Alert variant="error">
+        {error ?? "No se encontró el rompecabezas solicitado."}
+      </Alert>
+    );
+  }
 
-  const enriched: Puzzle = {
-    ...puzzle,
-    piezas_disponibles: available.length,
-    piezas_faltantes: missing.length,
-    total_conexiones: connections.length,
-  };
+  const sortedPieces = [...pieces].sort((a, b) => a.numero - b.numero);
 
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title={puzzle.nombre}
         subtitle={puzzle.tematica}
         actions={
-          <div className="flex gap-2">
-            <Link to="/">
-              <Button variant="secondary">← Volver</Button>
-            </Link>
-            <Button onClick={() => navigate(`/puzzles/${puzzleId}/armado`)}>
-              Armar rompecabezas
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/puzzles/${puzzle.id}/armado`)}
+          >
+            Comenzar armado
+          </Button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1 flex flex-col gap-4">
+      {/* Image + Summary */}
+      <div className="grid gap-6 sm:grid-cols-2 items-start">
+        <Card className="overflow-hidden">
+          {puzzle.imagen_url && !imageError ? (
+            <img
+              src={imageUrl(puzzle.imagen_url)}
+              alt={puzzle.nombre}
+              className="w-full h-56 object-cover"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="flex h-56 items-center justify-center bg-slate-100 text-slate-400 text-sm">
+              {puzzle.imagen_url
+                ? "No se pudo cargar la imagen general del rompecabezas."
+                : "Sin imagen registrada."}
+            </div>
+          )}
+        </Card>
+
+        <div className="space-y-4">
+          <PuzzleSummary puzzle={puzzle} />
+          <div className="text-xs text-slate-400 space-y-1 px-1">
+            <p>
+              <span className="font-medium text-slate-600">ID:</span> {puzzle.id}
+            </p>
+            {puzzle.imagen_url && (
+              <p className="truncate">
+                <span className="font-medium text-slate-600">Imagen:</span>{" "}
+                {puzzle.imagen_url}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pieces table */}
+      <section>
+        <h2 className="text-base font-semibold text-slate-800 mb-3">Piezas</h2>
+        {sortedPieces.length === 0 ? (
+          <Alert variant="info">
+            Este rompecabezas todavía no tiene piezas registradas.
+          </Alert>
+        ) : (
           <Card className="overflow-hidden">
-            {puzzle.imagen_url ? (
-              <img
-                src={imageUrl(puzzle.imagen_url)}
-                alt={puzzle.nombre}
-                className="w-full object-cover max-h-64"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-48 bg-slate-100 text-5xl text-slate-300">
-                🧩
-              </div>
-            )}
-          </Card>
-          <PuzzleSummary puzzle={enriched} />
-        </div>
-
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <Card className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-3">Piezas</h2>
-            {pieces.length === 0 ? (
-              <p className="text-sm text-slate-400">Sin piezas registradas.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {pieces
-                  .slice()
-                  .sort((a, b) => a.numero - b.numero)
-                  .map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm"
-                    >
-                      <span className="font-medium text-slate-800">
-                        Pieza {p.numero}
-                      </span>
-                      <Badge variant={p.disponible ? "disponible" : "faltante"}>
-                        {p.disponible ? "Disponible" : "Faltante"}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3">Número</th>
+                  <th className="px-4 py-3">ID</th>
+                  <th className="px-4 py-3">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sortedPieces.map((piece) => (
+                  <tr
+                    key={piece.id}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      {piece.numero}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                      {piece.id}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant={piece.disponible ? "disponible" : "faltante"}
+                      >
+                        {piece.disponible ? "Disponible" : "Faltante"}
                       </Badge>
-                    </div>
-                  ))}
-              </div>
-            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Card>
+        )}
+      </section>
 
-          <Card className="p-5">
-            <h2 className="font-semibold text-slate-900 mb-3">Conexiones</h2>
-            {connections.length === 0 ? (
-              <p className="text-sm text-slate-400">Sin conexiones registradas.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wide">
-                      <th className="pb-2 pr-4">Pieza origen</th>
-                      <th className="pb-2 pr-4">Punto</th>
-                      <th className="pb-2 pr-4">Pieza destino</th>
-                      <th className="pb-2">Punto</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {connections.map((c, i) => (
-                      <tr key={i}>
-                        <td className="py-2 pr-4 text-slate-700">
-                          Pieza {c.numero_origen}
-                        </td>
-                        <td className="py-2 pr-4">
-                          <Badge>{c.conexion_pieza1}</Badge>
-                        </td>
-                        <td className="py-2 pr-4 text-slate-700">
-                          Pieza {c.numero_destino}
-                        </td>
-                        <td className="py-2">
-                          <Badge>{c.conexion_pieza2}</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+      {/* Connections table */}
+      <section>
+        <h2 className="text-base font-semibold text-slate-800 mb-3">
+          Conexiones
+        </h2>
+        {connections.length === 0 ? (
+          <Alert variant="info">
+            Este rompecabezas todavía no tiene conexiones registradas.
+          </Alert>
+        ) : (
+          <Card className="overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3">Pieza origen</th>
+                  <th className="px-4 py-3">Conexión</th>
+                  <th className="px-4 py-3">Pieza destino</th>
+                  <th className="px-4 py-3">Conexión</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {connections.map((conn, i) => (
+                  <tr
+                    key={i}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      Pieza {conn.numero_origen}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                        #{conn.conexion_pieza1}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      Pieza {conn.numero_destino}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                        #{conn.conexion_pieza2}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Card>
-        </div>
+        )}
+      </section>
+
+      {/* Bottom CTA */}
+      <div className="flex justify-end border-t border-slate-100 pt-6">
+        <Button
+          variant="primary"
+          onClick={() => navigate(`/puzzles/${puzzle.id}/armado`)}
+        >
+          Comenzar armado →
+        </Button>
       </div>
     </div>
   );
