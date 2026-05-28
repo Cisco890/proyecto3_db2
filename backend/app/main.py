@@ -7,6 +7,7 @@ import os
 from app.config import settings
 from app.db import db
 from app.services.import_service import import_puzzle_from_files, import_puzzle_from_data_dir
+from app.routers import puzzle_router, assembly_router
 
 
 @asynccontextmanager
@@ -38,6 +39,14 @@ app.add_middleware(
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# Routers del paso 02
+app.include_router(puzzle_router.router)
+app.include_router(assembly_router.router)
+
+
+# ------------------------------------------------------------------ #
+#  Endpoints del paso 01 (se mantienen igual)                        #
+# ------------------------------------------------------------------ #
 
 @app.get("/health")
 def health_check():
