@@ -1,0 +1,7 @@
+id,numero,disponible,id_puzzle
+pieza_001,1,true,puzzle_001
+pieza_002,2,true,puzzle_001
+pieza_003,3,true,puzzle_001
+pieza_004,4,false,puzzle_001
+pieza_005,5,true,puzzle_001
+pieza_006,6,true,puzzle_001
