@@ -46,29 +46,40 @@ uvicorn app.main:app --reload --port 8000
 | GET | `/health` | Health check del backend y Neo4j |
 | POST | `/api/puzzles/import` | Importar puzzle desde archivos (multipart) |
 | POST | `/api/puzzles/import-local` | Importar desde directorio `data/` |
+| GET | `/api/puzzles` | Obtener todos los rompecabezas con su conteo de piezas |
+| GET | `/api/puzzles/{puzzle_id}` | Obtener detalle de un rompecabezas específico |
+| GET | `/api/puzzles/{puzzle_id}/pieces` | Obtener todas las piezas de un rompecabezas específico |
+| GET | `/api/puzzles/{puzzle_id}/connections` | Obtener todas las conexiones de un rompecabezas específico |
+| POST | `/api/puzzles/{puzzle_id}/assembly` | Generar orden e instrucciones de armado paso a paso usando BFS |
 
 ## Estructura del proyecto
 
 ```
 backend/
 ├── app/
-│   ├── main.py              # Aplicación FastAPI
-│   ├── config.py             # Variables de entorno
-│   ├── db.py                 # Conexión a Neo4j
+│   ├── main.py                   # Aplicación FastAPI y endpoints principales
+│   ├── config.py                 # Variables de entorno y configuración
+│   ├── db.py                     # Conexión, inicialización y cierre de Neo4j
 │   ├── schemas/
-│   │   └── puzzle_schema.py  # Esquemas Pydantic
+│   │   ├── puzzle_schema.py      # Esquemas Pydantic para rompecabezas, piezas e importación
+│   │   └── assembly_schema.py    # Esquemas Pydantic para peticiones y resultados de armado
 │   ├── repositories/
-│   │   └── puzzle_repository.py  # Operaciones Neo4j
+│   │   ├── puzzle_repository.py  # Operaciones de base de datos para CRUD de rompecabezas
+│   │   └── assembly_repository.py # Consultas y operaciones Neo4j para el armado (nodos y relaciones)
 │   ├── services/
-│   │   ├── import_service.py     # Lógica de importación
-│   │   └── validation_service.py # Validaciones
+│   │   ├── import_service.py     # Lógica y flujos de importación desde archivos y directorio local
+│   │   ├── validation_service.py # Validaciones de congruencia e integridad de las piezas
+│   │   └── assembly_service.py   # Algoritmo BFS para planificar el armado ordenado paso a paso
 │   └── routers/
-├── data/                     # Archivos de prueba
-├── uploads/puzzles/          # Imágenes de puzzles
-├── tests/
-├── .env
-├── requirements.txt
-└── README.md
+│       ├── puzzle_router.py      # Rutas API para obtener rompecabezas, piezas y conexiones
+│       └── assembly_router.py    # Rutas API para el algoritmo e instrucciones de armado
+├── data/                         # Archivos JSON/CSV de prueba para importación local
+├── uploads/puzzles/              # Almacenamiento de imágenes de rompecabezas subidas
+├── tests/                        # Pruebas unitarias e integración del sistema
+├── .env                          # Variables de entorno y credenciales locales (privado)
+├── .env.example                  # Plantilla de variables de entorno de ejemplo
+├── requirements.txt              # Dependencias del proyecto
+└── README.md                     # Documentación general
 ```
 
 ## Verificación en Neo4j Browser
