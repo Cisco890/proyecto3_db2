@@ -1,6 +1,30 @@
-import { apiGet, apiPost, apiPostForm } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm } from "./client";
 import type { Puzzle, Piece, Connection, ImportResult } from "../types/puzzle";
 import type { AssemblyResult } from "../types/assembly";
+
+type DeletePieceResult = {
+  detail: string;
+  puzzle_id: string;
+  piece_id: string;
+  connections_deleted: number;
+  remaining_pieces: number;
+};
+
+type DeletePuzzleResult = {
+  detail: string;
+  puzzle_id: string;
+  pieces_deleted: number;
+  connections_deleted: number;
+};
+
+type UpdatePieceAvailabilityResult = {
+  detail: string;
+  puzzle_id: string;
+  piece_id: string;
+  piece_numero: number;
+  disponible: boolean;
+  active_connections: number;
+};
 
 export function getPuzzles(): Promise<Puzzle[]> {
   return apiGet<Puzzle[]>("/api/puzzles");
@@ -29,4 +53,26 @@ export function generateAssembly(
   return apiPost<AssemblyResult>(`/api/puzzles/${puzzleId}/assembly`, {
     start_piece_id: startPieceId,
   });
+}
+
+export function deletePieceFromPuzzle(
+  puzzleId: string,
+  pieceId: string
+): Promise<DeletePieceResult> {
+  return apiDelete<DeletePieceResult>(`/api/puzzles/${puzzleId}/pieces/${pieceId}`);
+}
+
+export function deletePuzzle(puzzleId: string): Promise<DeletePuzzleResult> {
+  return apiDelete<DeletePuzzleResult>(`/api/puzzles/${puzzleId}`);
+}
+
+export function updatePieceAvailability(
+  puzzleId: string,
+  pieceId: string,
+  disponible: boolean
+): Promise<UpdatePieceAvailabilityResult> {
+  return apiPatch<UpdatePieceAvailabilityResult>(
+    `/api/puzzles/${puzzleId}/pieces/${pieceId}/availability`,
+    { disponible }
+  );
 }

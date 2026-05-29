@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+  deletePieceFromPuzzle,
   getPuzzleById,
   getPiecesByPuzzle,
   getConnectionsByPuzzle,
+  updatePieceAvailability,
 } from "../api/puzzleApi";
 import { imageUrl } from "../api/client";
 import type { Puzzle, Piece, Connection } from "../types/puzzle";
@@ -25,18 +27,23 @@ export function PuzzleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [deletingPieceId, setDeletingPieceId] = useState<string | null>(null);
+  const [updatingPieceId, setUpdatingPieceId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!puzzleId) return;
+  const loadPuzzleData = useCallback(
+    async (showPageLoader = true) => {
+      if (!puzzleId) return;
 
-    async function load() {
-      setLoading(true);
+      if (showPageLoader) setLoading(true);
       setError(null);
+
       try {
         const [p, pcs, conns] = await Promise.all([
-          getPuzzleById(puzzleId!),
-          getPiecesByPuzzle(puzzleId!),
-          getConnectionsByPuzzle(puzzleId!),
+          getPuzzleById(puzzleId),
+          getPiecesByPuzzle(puzzleId),
+          getConnectionsByPuzzle(puzzleId),
         ]);
         setPuzzle(p);
         setPieces(pcs);
@@ -46,19 +53,81 @@ export function PuzzleDetailPage() {
           err instanceof Error ? err.message : "No se pudo cargar el rompecabezas."
         );
       } finally {
-        setLoading(false);
+        if (showPageLoader) setLoading(false);
       }
-    }
+    },
+    [puzzleId]
+  );
 
-    load();
-  }, [puzzleId]);
+  useEffect(() => {
+    if (!puzzleId) return;
+    void loadPuzzleData();
+  }, [puzzleId, loadPuzzleData]);
+
+  const handleDeletePiece = async (piece: Piece) => {
+    if (!puzzleId) return;
+
+    const confirmed = window.confirm(
+      `Eliminar la pieza ${piece.numero} (${piece.id})? Tambien se eliminaran sus conexiones.`
+    );
+    if (!confirmed) return;
+
+    setActionError(null);
+    setActionSuccess(null);
+    setDeletingPieceId(piece.id);
+
+    try {
+      const result = await deletePieceFromPuzzle(puzzleId, piece.id);
+      await loadPuzzleData(false);
+      setActionSuccess(
+        `Pieza ${piece.numero} eliminada. Conexiones eliminadas: ${result.connections_deleted}.`
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "No se pudo eliminar la pieza."
+      );
+    } finally {
+      setDeletingPieceId(null);
+    }
+  };
+
+  const handleTogglePieceAvailability = async (piece: Piece) => {
+    if (!puzzleId) return;
+
+    const nextDisponibilidad = !piece.disponible;
+    setActionError(null);
+    setActionSuccess(null);
+    setUpdatingPieceId(piece.id);
+
+    try {
+      const result = await updatePieceAvailability(
+        puzzleId,
+        piece.id,
+        nextDisponibilidad
+      );
+      await loadPuzzleData(false);
+      setActionSuccess(
+        `Pieza ${piece.numero} actualizada a ${
+          result.disponible ? "disponible" : "faltante"
+        }. Conexiones activas: ${result.active_connections}.`
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo actualizar el estado de la pieza."
+      );
+    } finally {
+      setUpdatingPieceId(null);
+    }
+  };
 
   if (loading) return <LoadingState message="Cargando rompecabezas..." />;
 
   if (error || !puzzle) {
     return (
       <Alert variant="error">
-        {error ?? "No se encontró el rompecabezas solicitado."}
+        {error ?? "No se encontro el rompecabezas solicitado."}
       </Alert>
     );
   }
@@ -80,7 +149,6 @@ export function PuzzleDetailPage() {
         }
       />
 
-      {/* Image + Summary */}
       <div className="grid gap-6 sm:grid-cols-2 items-start">
         <Card className="overflow-hidden">
           {puzzle.imagen_url && !imageError ? (
@@ -115,21 +183,35 @@ export function PuzzleDetailPage() {
         </div>
       </div>
 
-      {/* Pieces table */}
       <section>
         <h2 className="text-base font-semibold text-slate-800 mb-3">Piezas</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Haz clic en el estado para cambiar entre Disponible y Faltante.
+        </p>
+        {actionError && (
+          <Alert variant="error" className="mb-3">
+            {actionError}
+          </Alert>
+        )}
+        {actionSuccess && (
+          <Alert variant="success" className="mb-3">
+            {actionSuccess}
+          </Alert>
+        )}
+
         {sortedPieces.length === 0 ? (
           <Alert variant="info">
-            Este rompecabezas todavía no tiene piezas registradas.
+            Este rompecabezas todavia no tiene piezas registradas.
           </Alert>
         ) : (
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-4 py-3">Número</th>
+                  <th className="px-4 py-3">Numero</th>
                   <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -145,11 +227,34 @@ export function PuzzleDetailPage() {
                       {piece.id}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant={piece.disponible ? "disponible" : "faltante"}
+                      <button
+                        type="button"
+                        className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:cursor-not-allowed"
+                        disabled={deletingPieceId !== null || updatingPieceId !== null}
+                        onClick={() => void handleTogglePieceAvailability(piece)}
                       >
-                        {piece.disponible ? "Disponible" : "Faltante"}
-                      </Badge>
+                        <Badge
+                          variant={piece.disponible ? "disponible" : "faltante"}
+                        >
+                          {piece.disponible ? "Disponible" : "Faltante"}
+                        </Badge>
+                      </button>
+                      {updatingPieceId === piece.id && (
+                        <span className="ml-2 text-xs text-slate-500">
+                          Actualizando...
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="danger"
+                        className="px-3 py-1.5 text-xs"
+                        loading={deletingPieceId === piece.id}
+                        disabled={deletingPieceId !== null || updatingPieceId !== null}
+                        onClick={() => void handleDeletePiece(piece)}
+                      >
+                        Eliminar
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -159,14 +264,13 @@ export function PuzzleDetailPage() {
         )}
       </section>
 
-      {/* Connections table */}
       <section>
         <h2 className="text-base font-semibold text-slate-800 mb-3">
           Conexiones
         </h2>
         {connections.length === 0 ? (
           <Alert variant="info">
-            Este rompecabezas todavía no tiene conexiones registradas.
+            Este rompecabezas todavia no tiene conexiones registradas.
           </Alert>
         ) : (
           <Card className="overflow-hidden">
@@ -174,9 +278,9 @@ export function PuzzleDetailPage() {
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <th className="px-4 py-3">Pieza origen</th>
-                  <th className="px-4 py-3">Conexión</th>
+                  <th className="px-4 py-3">Conexion</th>
                   <th className="px-4 py-3">Pieza destino</th>
-                  <th className="px-4 py-3">Conexión</th>
+                  <th className="px-4 py-3">Conexion</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -209,13 +313,12 @@ export function PuzzleDetailPage() {
         )}
       </section>
 
-      {/* Bottom CTA */}
       <div className="flex justify-end border-t border-slate-100 pt-6">
         <Button
           variant="primary"
           onClick={() => navigate(`/puzzles/${puzzle.id}/armado`)}
         >
-          Comenzar armado →
+          Comenzar armado
         </Button>
       </div>
     </div>

@@ -49,6 +49,12 @@ class PieceSchema(BaseModel):
         return v
 
 
+class PieceAvailabilityUpdateSchema(BaseModel):
+    """Esquema para actualizar disponibilidad de una pieza."""
+
+    disponible: bool
+
+
 class ConnectionSchema(BaseModel):
     """Esquema para validar los datos de una conexión desde conexiones.csv."""
 

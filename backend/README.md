@@ -1,6 +1,6 @@
-# Backend - Rompecabezas con Neo4j
+﻿# Backend - Rompecabezas con Neo4j
 
-## Descripción
+## DescripciÃ³n
 
 Backend en Python con FastAPI para modelar rompecabezas como grafos en Neo4j. Permite importar puzzles desde archivos y generar instrucciones de armado.
 
@@ -9,7 +9,7 @@ Backend en Python con FastAPI para modelar rompecabezas como grafos en Neo4j. Pe
 - Python 3.10+
 - Neo4j Community Edition o AuraDB
 
-## Instalación
+## InstalaciÃ³n
 
 ```bash
 # Crear entorno virtual
@@ -22,7 +22,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Configuración
+## ConfiguraciÃ³n
 
 Editar el archivo `.env` con las credenciales de Neo4j:
 
@@ -33,7 +33,7 @@ NEO4J_PASSWORD=tu_password
 UPLOAD_DIR=uploads/puzzles
 ```
 
-## Ejecución
+## EjecuciÃ³n
 
 ```bash
 uvicorn app.main:app --reload --port 8000
@@ -41,48 +41,51 @@ uvicorn app.main:app --reload --port 8000
 
 ## Endpoints disponibles
 
-| Método | Ruta | Descripción |
+| MÃ©todo | Ruta | DescripciÃ³n |
 |--------|------|-------------|
 | GET | `/health` | Health check del backend y Neo4j |
 | POST | `/api/puzzles/import` | Importar puzzle desde archivos (multipart) |
 | POST | `/api/puzzles/import-local` | Importar desde directorio `data/` |
 | GET | `/api/puzzles` | Obtener todos los rompecabezas con su conteo de piezas |
-| GET | `/api/puzzles/{puzzle_id}` | Obtener detalle de un rompecabezas específico |
-| GET | `/api/puzzles/{puzzle_id}/pieces` | Obtener todas las piezas de un rompecabezas específico |
-| GET | `/api/puzzles/{puzzle_id}/connections` | Obtener todas las conexiones de un rompecabezas específico |
+| GET | `/api/puzzles/{puzzle_id}` | Obtener detalle de un rompecabezas especÃ­fico |
+| GET | `/api/puzzles/{puzzle_id}/pieces` | Obtener todas las piezas de un rompecabezas especÃ­fico |
+| GET | `/api/puzzles/{puzzle_id}/connections` | Obtener conexiones activas entre piezas disponibles |
+| PATCH | `/api/puzzles/{puzzle_id}/pieces/{piece_id}/availability` | Actualizar estado disponible/faltante de una pieza |
+| DELETE | `/api/puzzles/{puzzle_id}` | Eliminar un rompecabezas con todas sus piezas y conexiones |
+| DELETE | `/api/puzzles/{puzzle_id}/pieces/{piece_id}` | Eliminar una pieza especifica del rompecabezas |
 | POST | `/api/puzzles/{puzzle_id}/assembly` | Generar orden e instrucciones de armado paso a paso usando BFS |
 
 ## Estructura del proyecto
 
 ```
 backend/
-├── app/
-│   ├── main.py                   # Aplicación FastAPI y endpoints principales
-│   ├── config.py                 # Variables de entorno y configuración
-│   ├── db.py                     # Conexión, inicialización y cierre de Neo4j
-│   ├── schemas/
-│   │   ├── puzzle_schema.py      # Esquemas Pydantic para rompecabezas, piezas e importación
-│   │   └── assembly_schema.py    # Esquemas Pydantic para peticiones y resultados de armado
-│   ├── repositories/
-│   │   ├── puzzle_repository.py  # Operaciones de base de datos para CRUD de rompecabezas
-│   │   └── assembly_repository.py # Consultas y operaciones Neo4j para el armado (nodos y relaciones)
-│   ├── services/
-│   │   ├── import_service.py     # Lógica y flujos de importación desde archivos y directorio local
-│   │   ├── validation_service.py # Validaciones de congruencia e integridad de las piezas
-│   │   └── assembly_service.py   # Algoritmo BFS para planificar el armado ordenado paso a paso
-│   └── routers/
-│       ├── puzzle_router.py      # Rutas API para obtener rompecabezas, piezas y conexiones
-│       └── assembly_router.py    # Rutas API para el algoritmo e instrucciones de armado
-├── data/                         # Archivos JSON/CSV de prueba para importación local
-├── uploads/puzzles/              # Almacenamiento de imágenes de rompecabezas subidas
-├── tests/                        # Pruebas unitarias e integración del sistema
-├── .env                          # Variables de entorno y credenciales locales (privado)
-├── .env.example                  # Plantilla de variables de entorno de ejemplo
-├── requirements.txt              # Dependencias del proyecto
-└── README.md                     # Documentación general
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ main.py                   # AplicaciÃ³n FastAPI y endpoints principales
+â”‚   â”œâ”€â”€ config.py                 # Variables de entorno y configuraciÃ³n
+â”‚   â”œâ”€â”€ db.py                     # ConexiÃ³n, inicializaciÃ³n y cierre de Neo4j
+â”‚   â”œâ”€â”€ schemas/
+â”‚   â”‚   â”œâ”€â”€ puzzle_schema.py      # Esquemas Pydantic para rompecabezas, piezas e importaciÃ³n
+â”‚   â”‚   â””â”€â”€ assembly_schema.py    # Esquemas Pydantic para peticiones y resultados de armado
+â”‚   â”œâ”€â”€ repositories/
+â”‚   â”‚   â”œâ”€â”€ puzzle_repository.py  # Operaciones de base de datos para CRUD de rompecabezas
+â”‚   â”‚   â””â”€â”€ assembly_repository.py # Consultas y operaciones Neo4j para el armado (nodos y relaciones)
+â”‚   â”œâ”€â”€ services/
+â”‚   â”‚   â”œâ”€â”€ import_service.py     # LÃ³gica y flujos de importaciÃ³n desde archivos y directorio local
+â”‚   â”‚   â”œâ”€â”€ validation_service.py # Validaciones de congruencia e integridad de las piezas
+â”‚   â”‚   â””â”€â”€ assembly_service.py   # Algoritmo BFS para planificar el armado ordenado paso a paso
+â”‚   â””â”€â”€ routers/
+â”‚       â”œâ”€â”€ puzzle_router.py      # Rutas API para obtener rompecabezas, piezas y conexiones
+â”‚       â””â”€â”€ assembly_router.py    # Rutas API para el algoritmo e instrucciones de armado
+â”œâ”€â”€ data/                         # Archivos JSON/CSV de prueba para importaciÃ³n local
+â”œâ”€â”€ uploads/puzzles/              # Almacenamiento de imÃ¡genes de rompecabezas subidas
+â”œâ”€â”€ tests/                        # Pruebas unitarias e integraciÃ³n del sistema
+â”œâ”€â”€ .env                          # Variables de entorno y credenciales locales (privado)
+â”œâ”€â”€ .env.example                  # Plantilla de variables de entorno de ejemplo
+â”œâ”€â”€ requirements.txt              # Dependencias del proyecto
+â””â”€â”€ README.md                     # DocumentaciÃ³n general
 ```
 
-## Verificación en Neo4j Browser
+## VerificaciÃ³n en Neo4j Browser
 
 ```cypher
 -- Ver puzzle y piezas

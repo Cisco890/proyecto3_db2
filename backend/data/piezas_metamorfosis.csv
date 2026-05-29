@@ -1,0 +1,15 @@
+id,numero,disponible,id_puzzle
+pieza_001,1,true,puzzle_002
+pieza_002,2,true,puzzle_002
+pieza_003,3,true,puzzle_002
+pieza_004,4,true,puzzle_002
+pieza_005,5,true,puzzle_002
+pieza_006,6,true,puzzle_002
+pieza_007,7,true,puzzle_002
+pieza_008,8,true,puzzle_002
+pieza_009,9,true,puzzle_002
+pieza_010,10,true,puzzle_002
+pieza_011,11,true,puzzle_002
+pieza_012,12,true,puzzle_002
+pieza_013,13,true,puzzle_002
+pieza_014,14,true,puzzle_002

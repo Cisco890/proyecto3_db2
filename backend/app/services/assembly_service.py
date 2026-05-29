@@ -1,4 +1,4 @@
-from collections import deque
+﻿from collections import deque
 
 from app.errors import (
     AppError,
@@ -24,8 +24,9 @@ def _build_instruction(
     new_connection: int,
 ) -> str:
     return (
-        f"Une la conexión {base_connection} de la pieza {base_piece} "
-        f"con la conexión {new_connection} de la pieza {new_piece}."
+        f"Une la conexion {base_connection} de la pieza {base_piece} "
+        f"con la conexion {new_connection} de la pieza {new_piece}. "
+        "Verifica: ambas piezas quedan firmes y no se separan al soltar."
     )
 
 
@@ -110,11 +111,11 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
             PIECE_NOT_IN_PUZZLE,
         )
 
-    # 5. Validar que la pieza inicial esté disponible
+    # 5. Validar que la pieza inicial este disponible
     if not start_piece.get("disponible", False):
         raise AppError(
             400,
-            "La pieza inicial no está disponible. Selecciona una pieza marcada como disponible.",
+            "La pieza inicial no esta disponible. Selecciona una pieza marcada como disponible.",
             PIECE_NOT_AVAILABLE,
         )
 
@@ -140,25 +141,13 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
         if not current:
             continue
 
-        neighbors = assembly_repository.get_neighbors_with_connections(current_id)
+        neighbors = assembly_repository.get_neighbors_with_connections(puzzle_id, current_id)
 
         for neighbor in neighbors:
             vecina = neighbor["vecina"]
             vecina_id = vecina["id"]
 
             if vecina_id in visited:
-                continue
-
-            if not vecina.get("disponible", False):
-                unresolved.append(
-                    UnresolvedConnection(
-                        from_piece=current["numero"],
-                        from_connection=neighbor["actual_connection"],
-                        to_piece=vecina["numero"],
-                        to_connection=neighbor["vecina_connection"],
-                        reason="La pieza destino no está disponible.",
-                    )
-                )
                 continue
 
             visited.add(vecina_id)
@@ -216,3 +205,4 @@ def generate_assembly_steps(puzzle_id: str, start_piece_id: str) -> AssemblyResu
         unresolved_connections=unresolved,
         summary=summary,
     )
+

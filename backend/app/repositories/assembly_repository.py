@@ -28,7 +28,7 @@ class AssemblyRepository:
             record = result.single()
             return dict(record["p"]) if record else None
 
-    def get_neighbors_with_connections(self, piece_id: str) -> list[dict]:
+    def get_neighbors_with_connections(self, puzzle_id: str, piece_id: str) -> list[dict]:
         """
         Devuelve vecinos de una pieza recorriendo CONECTA_CON en ambas direcciones.
         Determina correctamente cuál punto de conexión corresponde a cada pieza.
@@ -36,11 +36,12 @@ class AssemblyRepository:
         with db.get_session() as session:
             result = session.run(
                 """
-                MATCH (actual:Pieza {id: $piece_id})-[r:CONECTA_CON]-(vecina:Pieza)
+                MATCH (actual:Pieza {id: $piece_id, disponible: true})-[r:CONECTA_CON]-(vecina:Pieza {disponible: true, id_puzzle: $puzzle_id})
                 RETURN actual, r, vecina,
                        startNode(r) AS inicio,
                        endNode(r)   AS fin
                 """,
+                puzzle_id=puzzle_id,
                 piece_id=piece_id,
             )
             neighbors = []

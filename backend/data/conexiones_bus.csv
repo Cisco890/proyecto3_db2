@@ -1,0 +1,15 @@
+pieza_origen,pieza_destino,conexion_pieza1,conexion_pieza2
+
+pieza_001,pieza_002,1,1
+pieza_001,pieza_004,2,2
+pieza_002,pieza_003,2,1
+pieza_002,pieza_005,3,1
+pieza_005,pieza_007,3,1
+pieza_004,pieza_005,1,2
+pieza_004,pieza_006,3,1
+pieza_006,pieza_007,2,2
+pieza_006,pieza_008,3,2
+pieza_007,pieza_009,3,1
+pieza_008,pieza_009,1,2
+pieza_009,pieza_010,3,1
+

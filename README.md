@@ -114,6 +114,9 @@ GET  /api/puzzles
 GET  /api/puzzles/{puzzle_id}
 GET  /api/puzzles/{puzzle_id}/pieces
 GET  /api/puzzles/{puzzle_id}/connections
+PATCH /api/puzzles/{puzzle_id}/pieces/{piece_id}/availability
+DELETE /api/puzzles/{puzzle_id}
+DELETE /api/puzzles/{puzzle_id}/pieces/{piece_id}
 POST /api/puzzles/{puzzle_id}/assembly
 GET  /uploads/puzzles/{filename}
 ```

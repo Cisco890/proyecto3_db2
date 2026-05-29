@@ -75,6 +75,106 @@ class PuzzleRepository:
                 cp2=conexion_pieza2,
             )
 
+    def delete_puzzle(self, puzzle_id: str) -> Optional[dict]:
+        """Elimina un puzzle junto con sus piezas y conexiones asociadas."""
+        with db.get_session() as session:
+            counts = session.run(
+                """
+                MATCH (puz:Puzzle {id: $puzzle_id})
+                OPTIONAL MATCH (piece:Pieza {id_puzzle: $puzzle_id})
+                OPTIONAL MATCH (piece)-[rel:CONECTA_CON]-()
+                RETURN count(DISTINCT piece) AS pieces_deleted,
+                       count(DISTINCT rel) AS connections_deleted
+                """,
+                puzzle_id=puzzle_id,
+            ).single()
+
+            if not counts:
+                return None
+
+            session.run(
+                """
+                MATCH (piece:Pieza {id_puzzle: $puzzle_id})
+                DETACH DELETE piece
+                """,
+                puzzle_id=puzzle_id,
+            )
+            session.run(
+                """
+                MATCH (puz:Puzzle {id: $puzzle_id})
+                DETACH DELETE puz
+                """,
+                puzzle_id=puzzle_id,
+            )
+
+            return {
+                "puzzle_id": puzzle_id,
+                "pieces_deleted": counts["pieces_deleted"],
+                "connections_deleted": counts["connections_deleted"],
+            }
+
+    def delete_piece(self, puzzle_id: str, piece_id: str) -> Optional[dict]:
+        """Elimina una pieza de un puzzle y devuelve conteos de borrado."""
+        with db.get_session() as session:
+            result = session.run(
+                """
+                MATCH (puz:Puzzle {id: $puzzle_id})-[:CONTIENE]->(piece:Pieza {id: $piece_id})
+                OPTIONAL MATCH (piece)-[rel:CONECTA_CON]-()
+                WITH puz, piece, count(DISTINCT rel) AS connections_deleted
+                DETACH DELETE piece
+                WITH puz, connections_deleted
+                OPTIONAL MATCH (puz)-[:CONTIENE]->(remaining:Pieza)
+                WITH puz, connections_deleted, count(remaining) AS remaining_pieces
+                SET puz.total_piezas = remaining_pieces
+                RETURN connections_deleted, remaining_pieces
+                """,
+                puzzle_id=puzzle_id,
+                piece_id=piece_id,
+            ).single()
+
+            if not result:
+                return None
+
+            return {
+                "puzzle_id": puzzle_id,
+                "piece_id": piece_id,
+                "connections_deleted": result["connections_deleted"],
+                "remaining_pieces": result["remaining_pieces"],
+            }
+
+    def update_piece_availability(
+        self, puzzle_id: str, piece_id: str, disponible: bool
+    ) -> Optional[dict]:
+        """Actualiza disponibilidad de una pieza sin borrar relaciones."""
+        with db.get_session() as session:
+            result = session.run(
+                """
+                MATCH (puz:Puzzle {id: $puzzle_id})-[:CONTIENE]->(piece:Pieza {id: $piece_id})
+                SET piece.disponible = $disponible
+                WITH piece
+                OPTIONAL MATCH (piece)-[r:CONECTA_CON]-(active_neighbor:Pieza {disponible: true, id_puzzle: $puzzle_id})
+                WHERE piece.disponible = true
+                RETURN piece.id AS piece_id,
+                       piece.numero AS piece_numero,
+                       piece.disponible AS disponible,
+                       count(DISTINCT r) AS active_connections
+                """,
+                puzzle_id=puzzle_id,
+                piece_id=piece_id,
+                disponible=disponible,
+            ).single()
+
+            if not result:
+                return None
+
+            return {
+                "puzzle_id": puzzle_id,
+                "piece_id": result["piece_id"],
+                "piece_numero": result["piece_numero"],
+                "disponible": result["disponible"],
+                "active_connections": result["active_connections"],
+            }
+
     # ------------------------------------------------------------------ #
     #  LECTURA  (usados por routers y assembly_service)                   #
     # ------------------------------------------------------------------ #
@@ -108,7 +208,8 @@ class PuzzleRepository:
                 MATCH (puz:Puzzle {id: $puzzle_id})
                 OPTIONAL MATCH (puz)-[:CONTIENE]->(disponible:Pieza {disponible: true})
                 OPTIONAL MATCH (puz)-[:CONTIENE]->(faltante:Pieza  {disponible: false})
-                OPTIONAL MATCH (puz)-[:CONTIENE]->(p:Pieza)-[c:CONECTA_CON]-()
+                OPTIONAL MATCH (puz)-[:CONTIENE]->(a:Pieza {disponible: true})-[c:CONECTA_CON]->(b:Pieza {disponible: true})
+                WHERE b.id_puzzle = $puzzle_id
                 RETURN puz,
                        count(DISTINCT disponible)  AS piezas_disponibles,
                        count(DISTINCT faltante)    AS piezas_faltantes,
@@ -138,12 +239,13 @@ class PuzzleRepository:
             return [dict(record["p"]) for record in result]
 
     def get_connections_by_puzzle(self, puzzle_id: str) -> list[dict]:
-        """Devuelve todas las conexiones de un puzzle."""
+        """Devuelve conexiones activas (solo entre piezas disponibles)."""
         with db.get_session() as session:
             result = session.run(
                 """
-                MATCH (puz:Puzzle {id: $puzzle_id})-[:CONTIENE]->(a:Pieza)
-                MATCH (a)-[r:CONECTA_CON]->(b:Pieza)
+                MATCH (puz:Puzzle {id: $puzzle_id})-[:CONTIENE]->(a:Pieza {disponible: true})
+                MATCH (a)-[r:CONECTA_CON]->(b:Pieza {disponible: true})
+                WHERE b.id_puzzle = $puzzle_id
                 RETURN a.id       AS pieza_origen,
                        a.numero   AS numero_origen,
                        b.id       AS pieza_destino,
@@ -154,6 +256,37 @@ class PuzzleRepository:
                 puzzle_id=puzzle_id,
             )
             return [dict(record) for record in result]
+
+    def get_piece_by_id(self, piece_id: str) -> Optional[dict]:
+        """Devuelve una pieza por id."""
+        with db.get_session() as session:
+            result = session.run(
+                """
+                MATCH (p:Pieza {id: $piece_id})
+                RETURN p
+                """,
+                piece_id=piece_id,
+            )
+            record = result.single()
+            if not record:
+                return None
+            return dict(record["p"])
+
+    def get_piece_in_puzzle(self, puzzle_id: str, piece_id: str) -> Optional[dict]:
+        """Devuelve la pieza si pertenece al puzzle indicado."""
+        with db.get_session() as session:
+            result = session.run(
+                """
+                MATCH (puz:Puzzle {id: $puzzle_id})-[:CONTIENE]->(p:Pieza {id: $piece_id})
+                RETURN p
+                """,
+                puzzle_id=puzzle_id,
+                piece_id=piece_id,
+            )
+            record = result.single()
+            if not record:
+                return None
+            return dict(record["p"])
 
 
 puzzle_repository = PuzzleRepository()

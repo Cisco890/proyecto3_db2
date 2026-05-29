@@ -5,9 +5,19 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 
-type Props = { puzzle: Puzzle };
+type Props = {
+  puzzle: Puzzle;
+  onDelete: (puzzle: Puzzle) => void;
+  deleting?: boolean;
+  disableActions?: boolean;
+};
 
-export function PuzzleCard({ puzzle }: Props) {
+export function PuzzleCard({
+  puzzle,
+  onDelete,
+  deleting = false,
+  disableActions = false,
+}: Props) {
   const navigate = useNavigate();
 
   return (
@@ -46,13 +56,23 @@ export function PuzzleCard({ puzzle }: Props) {
           )}
         </div>
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 space-y-2">
           <Button
             variant="primary"
             className="w-full"
+            disabled={disableActions}
             onClick={() => navigate(`/puzzles/${puzzle.id}`)}
           >
             Ver detalle
+          </Button>
+          <Button
+            variant="danger"
+            className="w-full"
+            loading={deleting}
+            disabled={disableActions && !deleting}
+            onClick={() => onDelete(puzzle)}
+          >
+            Eliminar todo
           </Button>
         </div>
       </div>

@@ -79,6 +79,7 @@ export function AssemblyPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!puzzleId) return;
@@ -98,6 +99,7 @@ export function AssemblyPage() {
         setPieces(sortedPieces);
         setSelectedStartPieceId(firstAvailablePiece?.id ?? "");
         setImageError(false);
+        setIsImagePreviewOpen(false);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "No se pudo cargar el rompecabezas."
@@ -109,6 +111,19 @@ export function AssemblyPage() {
 
     loadPageData();
   }, [puzzleId]);
+
+  useEffect(() => {
+    if (!isImagePreviewOpen) return;
+
+    function handleEsc(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsImagePreviewOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isImagePreviewOpen]);
 
   const availablePieces = useMemo(
     () => sortPiecesByNumber(pieces.filter((piece) => piece.disponible)),
@@ -207,7 +222,7 @@ export function AssemblyPage() {
         </Alert>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <main className="space-y-6">
           <Card className="p-5">
             <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_14rem]">
@@ -277,7 +292,33 @@ export function AssemblyPage() {
             placedCount={placedPieces.length}
             missingCount={visibleMissingPieces.length}
           />
-
+{assemblyResult && assemblyResult.steps.length > 0 && (
+            <Card className="p-5 border-amber-200 bg-amber-50">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-3">
+                Antes de empezar
+              </p>
+              <ul className="space-y-2 text-sm text-amber-900">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold">1.</span>
+                  <span>
+                    Coloca todas las piezas con el <span className="font-semibold">dibujo hacia arriba</span>. Ninguna pieza debe estar volteada.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold">2.</span>
+                  <span>
+                    Cada pieza tiene <span className="font-semibold">puntos de ensamble numerados</span> en sus bordes. El número de conexión indica cuál borde debes unir con el de la otra pieza.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 font-bold">3.</span>
+                  <span>
+                    En cada paso, la <span className="font-semibold">pieza base ya debe estar colocada</span> antes de agregar la nueva pieza.
+                  </span>
+                </li>
+              </ul>
+            </Card>
+          )}
           {assemblyResult ? (
             <Card className="p-5">
               {currentStep ? (
@@ -333,11 +374,13 @@ export function AssemblyPage() {
             )}
         </main>
 
-        <aside className="space-y-6">
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <ReferenceImage
             puzzle={puzzle}
+            currentStep={currentStep}
             imageError={imageError}
             onImageError={() => setImageError(true)}
+            onOpenPreview={() => setIsImagePreviewOpen(true)}
           />
 
           <PiecesPanel
@@ -347,6 +390,13 @@ export function AssemblyPage() {
           />
         </aside>
       </div>
+
+      <ImagePreviewModal
+        open={isImagePreviewOpen}
+        puzzle={puzzle}
+        currentStep={currentStep}
+        onClose={() => setIsImagePreviewOpen(false)}
+      />
     </div>
   );
 }
@@ -708,12 +758,16 @@ function UnresolvedConnections({ result }: { result: AssemblyResult }) {
 
 function ReferenceImage({
   puzzle,
+  currentStep,
   imageError,
   onImageError,
+  onOpenPreview,
 }: {
   puzzle: Puzzle;
+  currentStep: AssemblyStep | null;
   imageError: boolean;
   onImageError: () => void;
+  onOpenPreview: () => void;
 }) {
   return (
     <Card className="overflow-hidden">
@@ -721,22 +775,108 @@ function ReferenceImage({
         <p className="text-sm font-semibold text-slate-900">
           Referencia visual del rompecabezas
         </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Presiona la imagen para verla en grande con el paso actual debajo.
+        </p>
       </div>
       {puzzle.imagen_url && !imageError ? (
-        <img
-          src={imageUrl(puzzle.imagen_url)}
-          alt={puzzle.nombre}
-          className="h-56 w-full object-cover"
-          onError={onImageError}
-        />
+        <button
+          type="button"
+          className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          onClick={onOpenPreview}
+          aria-label="Abrir imagen de referencia en grande"
+        >
+          <img
+            src={imageUrl(puzzle.imagen_url)}
+            alt={puzzle.nombre}
+            className="h-72 w-full bg-slate-100 object-contain sm:h-80 lg:h-[30rem]"
+            onError={onImageError}
+          />
+          <div className="border-t border-slate-100 bg-white px-4 py-2 text-xs font-medium text-indigo-700">
+            {currentStep
+              ? `Paso actual: ${currentStep.step_number} - Pieza ${currentStep.base_piece} con pieza ${currentStep.new_piece}`
+              : "Sin paso activo. Genera instrucciones para ver detalles del paso."}
+          </div>
+        </button>
       ) : (
-        <div className="flex h-56 items-center justify-center bg-slate-100 px-5 text-center text-sm text-slate-500">
+        <div className="flex h-72 items-center justify-center bg-slate-100 px-5 text-center text-sm text-slate-500 sm:h-80 lg:h-[30rem]">
           {puzzle.imagen_url
             ? "No se pudo cargar la imagen general."
             : "Sin imagen registrada."}
         </div>
       )}
     </Card>
+  );
+}
+
+function ImagePreviewModal({
+  open,
+  puzzle,
+  currentStep,
+  onClose,
+}: {
+  open: boolean;
+  puzzle: Puzzle;
+  currentStep: AssemblyStep | null;
+  onClose: () => void;
+}) {
+  if (!open || !puzzle.imagen_url) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/70 p-4 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-6">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Vista ampliada</p>
+            <p className="text-xs text-slate-500">{puzzle.nombre}</p>
+          </div>
+          <Button variant="secondary" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="rounded-lg border border-slate-200 bg-slate-100 p-2">
+            <img
+              src={imageUrl(puzzle.imagen_url)}
+              alt={puzzle.nombre}
+              className="max-h-[65vh] w-full rounded object-contain"
+            />
+          </div>
+
+          <div className="mt-5 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+              Instrucciones del paso actual
+            </p>
+            {currentStep ? (
+              <div className="mt-2 space-y-2 text-sm text-indigo-950">
+                <p className="font-semibold">
+                  Paso {currentStep.step_number}: pieza {currentStep.base_piece} con pieza{" "}
+                  {currentStep.new_piece}
+                </p>
+                <p>{currentStep.instruction}</p>
+                <p className="text-xs text-indigo-800">
+                  Conexion base: {currentStep.base_connection} | Conexion nueva:{" "}
+                  {currentStep.new_connection}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-indigo-900">
+                No hay un paso activo todavia. Genera instrucciones para mostrar el paso actual.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

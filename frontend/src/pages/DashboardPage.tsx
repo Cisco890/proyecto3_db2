@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { getPuzzles } from "../api/puzzleApi";
+﻿import { useCallback, useEffect, useState } from "react";
+import { deletePuzzle, getPuzzles } from "../api/puzzleApi";
 import type { Puzzle } from "../types/puzzle";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PuzzleCard } from "../components/puzzle/PuzzleCard";
@@ -13,21 +13,58 @@ export function DashboardPage() {
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingPuzzleId, setDeletingPuzzleId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  const loadPuzzles = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    setError(null);
+
+    try {
+      const data = await getPuzzles();
+      setPuzzles(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar.");
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    getPuzzles()
-      .then(setPuzzles)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Error al cargar.")
-      )
-      .finally(() => setLoading(false));
-  }, []);
+    void loadPuzzles();
+  }, [loadPuzzles]);
+
+  async function handleDeletePuzzle(puzzle: Puzzle) {
+    const confirmed = window.confirm(
+      `Eliminar el rompecabezas "${puzzle.nombre}"? Esta accion borra todas sus piezas y conexiones.`
+    );
+    if (!confirmed) return;
+
+    setActionError(null);
+    setActionSuccess(null);
+    setDeletingPuzzleId(puzzle.id);
+
+    try {
+      const result = await deletePuzzle(puzzle.id);
+      await loadPuzzles(false);
+      setActionSuccess(
+        `Rompecabezas eliminado. Piezas: ${result.pieces_deleted}. Conexiones: ${result.connections_deleted}.`
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "No se pudo eliminar el rompecabezas."
+      );
+    } finally {
+      setDeletingPuzzleId(null);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Rompecabezas"
-        subtitle="Gestiona y arma tus rompecabezas desde aquí."
+        subtitle="Gestiona y arma tus rompecabezas desde aqui."
         actions={
           <Link to="/importar">
             <Button variant="primary">Importar rompecabezas</Button>
@@ -35,10 +72,22 @@ export function DashboardPage() {
         }
       />
 
+      {actionError && (
+        <Alert variant="error" className="mb-4">
+          {actionError}
+        </Alert>
+      )}
+
+      {actionSuccess && (
+        <Alert variant="success" className="mb-4">
+          {actionSuccess}
+        </Alert>
+      )}
+
       {loading && <LoadingState message="Cargando rompecabezas..." />}
 
       {!loading && error && (
-        <Alert variant="error" title="Error de conexión">
+        <Alert variant="error" title="Error de conexion">
           {error}
         </Alert>
       )}
@@ -48,7 +97,13 @@ export function DashboardPage() {
       {!loading && !error && puzzles.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {puzzles.map((puzzle) => (
-            <PuzzleCard key={puzzle.id} puzzle={puzzle} />
+            <PuzzleCard
+              key={puzzle.id}
+              puzzle={puzzle}
+              onDelete={handleDeletePuzzle}
+              deleting={deletingPuzzleId === puzzle.id}
+              disableActions={deletingPuzzleId !== null}
+            />
           ))}
         </div>
       )}
